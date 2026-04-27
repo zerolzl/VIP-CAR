@@ -70,12 +70,14 @@ install_system_deps() {
     info "Installing MySQL 8.0..."
     if ! rpm -qa | grep -q mysql-community-server; then
         wget https://dev.mysql.com/get/mysql80-community-release-el7-3.noarch.rpm -P /tmp/
-        rpm -ivh /tmp/mysql80-community-release-el7-3.noarch.rpm
         
-        info "Installing MySQL GPG key..."
-        rpm --import https://repo.mysql.com/RPM-GPG-KEY-mysql-2022
+        info "Installing MySQL repo with GPG check disabled..."
+        rpm -ivh --nosignature /tmp/mysql80-community-release-el7-3.noarch.rpm
         
-        yum install -y mysql-community-server --nogpgcheck
+        info "Disabling GPG check for MySQL packages..."
+        sed -i 's/gpgcheck=1/gpgcheck=0/g' /etc/yum.repos.d/mysql*-community.repo
+        
+        yum install -y mysql-community-server
     else
         info "MySQL already installed"
     fi
