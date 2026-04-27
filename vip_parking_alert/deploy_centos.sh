@@ -1,7 +1,6 @@
 #!/bin/bash
-# VIP车位告警系统 - CentOS 一键部署脚本
-# 使用前请确保以 root 用户运行
-# 本脚本使用 MySQL 数据库，不使用 SQLite
+# VIP车位告警系统 - CentOS 一键部署脚�?# 使用前请确保�?root 用户运行
+# 本脚本使�?MySQL 数据库，不使�?SQLite
 
 set -e
 
@@ -41,17 +40,17 @@ success() {
 # 检查是否为 root 用户
 check_root() {
     if [ "$(id -u)" != "0" ]; then
-        error "请以 root 用户运行此脚本"
+        error "请以 root 用户运行此脚�?
     fi
 }
 
-# 检查 CentOS 版本
+# 检�?CentOS 版本
 check_centos() {
     if [ -f /etc/centos-release ]; then
         CENTOS_VERSION=$(cat /etc/centos-release | grep -o '[0-9]\+' | head -n1)
         info "检测到 CentOS ${CENTOS_VERSION}"
         if [ "$CENTOS_VERSION" -lt 7 ]; then
-            error "本脚本仅支持 CentOS 7 及以上版本"
+            error "本脚本仅支持 CentOS 7 及以上版�?
         fi
     else
         error "未检测到 CentOS 系统"
@@ -63,11 +62,11 @@ install_system_deps() {
     info "安装系统依赖..."
     
     # 更新系统
-    info "更新系统软件包..."
+    info "更新系统软件�?.."
     yum update -y
     
     # 安装 EPEL
-    info "安装 EPEL 源..."
+    info "安装 EPEL �?.."
     yum install -y epel-release
     
     # 安装基础工具
@@ -82,7 +81,7 @@ install_system_deps() {
         rpm -ivh /tmp/mysql80-community-release-el7-3.noarch.rpm
         yum install -y mysql-community-server
     else
-        info "MySQL 已安装"
+        info "MySQL 已安�?
     fi
 }
 
@@ -94,7 +93,7 @@ install_nodejs() {
         curl -fsSL https://rpm.nodesource.com/setup_${NODE_VERSION}.x | bash -
         yum install -y nodejs
     else
-        info "Node.js 已安装"
+        info "Node.js 已安�?
     fi
     
     # 更新 npm
@@ -103,7 +102,7 @@ install_nodejs() {
 
 # 配置 MySQL
 configure_mysql() {
-    info "配置 MySQL 数据库..."
+    info "配置 MySQL 数据�?.."
     
     # 启动 MySQL 服务
     info "启动 MySQL 服务..."
@@ -111,7 +110,7 @@ configure_mysql() {
     systemctl start mysqld
     
     # 等待 MySQL 启动
-    info "等待 MySQL 初始化..."
+    info "等待 MySQL 初始�?.."
     for i in {1..30}; do
         if systemctl is-active --quiet mysqld; then
             break
@@ -126,8 +125,7 @@ configure_mysql() {
     if [ -z "$INITIAL_PASSWORD" ]; then
         error "无法获取 MySQL 初始密码"
     fi
-    
-    # 设置新密码并创建数据库
+
     info "配置数据库用户和权限..."
     MYSQL_SQL="ALTER USER 'root'@'localhost' IDENTIFIED BY '${MYSQL_PASSWORD}';
 CREATE DATABASE IF NOT EXISTS ${MYSQL_DATABASE} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
@@ -144,18 +142,17 @@ FLUSH PRIVILEGES;"
     success "MySQL 配置完成"
 }
 
-# 配置防火墙
-configure_firewall() {
-    info "配置防火墙..."
+# 配置防火�?configure_firewall() {
+    info "配置防火�?.."
     
     if systemctl is-active --quiet firewalld; then
-        # 开放 HTTP 端口
+        # 开�?HTTP 端口
         firewall-cmd --zone=public --add-port=80/tcp --permanent
         firewall-cmd --zone=public --add-port=8000/tcp --permanent
         firewall-cmd --reload
-        success "防火墙配置完成"
+        success "防火墙配置完�?
     else
-        warn "firewalld 未运行，跳过防火墙配置"
+        warn "firewalld 未运行，跳过防火墙配�?
     fi
 }
 
@@ -165,11 +162,10 @@ configure_selinux() {
     
     SELINUX_STATUS=$(getenforce)
     if [ "$SELINUX_STATUS" = "Enforcing" ]; then
-        # 允许 Nginx 连接到后端
-        setsebool -P httpd_can_network_connect 1
+        # 允许 Nginx 连接到后�?        setsebool -P httpd_can_network_connect 1
         success "SELinux 配置完成"
     else
-        warn "SELinux 未启用或已禁用"
+        warn "SELinux 未启用或已禁�?
     fi
 }
 
@@ -191,7 +187,7 @@ copy_app_files() {
     elif [ -d "../backend" ]; then
         cp -r ../backend/* ${APP_DIR}/backend/
     else
-        error "未找到后端代码目录"
+        error "未找到后端代码目�?
     fi
     
     # 复制前端代码
@@ -200,7 +196,7 @@ copy_app_files() {
     elif [ -d "../frontend" ]; then
         cp -r ../frontend/* ${APP_DIR}/frontend/
     else
-        error "未找到前端代码目录"
+        error "未找到前端代码目�?
     fi
     
     success "项目文件复制完成"
@@ -220,8 +216,7 @@ install_python_deps() {
     success "Python 依赖安装完成"
 }
 
-# 安装 Node.js 依赖并构建
-install_node_deps() {
+# 安装 Node.js 依赖并构�?install_node_deps() {
     info "安装 Node.js 依赖..."
     cd ${APP_DIR}/frontend
     
@@ -240,7 +235,7 @@ configure_env() {
     info "配置环境变量..."
     cat > ${APP_DIR}/backend/.env <<EOF
 # VIP专用车位告警系统 - CentOS 部署配置
-# 数据库配置 - 使用 MySQL
+# 数据库配�?- 使用 MySQL
 MYSQL_HOST=localhost
 MYSQL_PORT=3306
 MYSQL_USER=${MYSQL_USER}
@@ -250,8 +245,7 @@ MYSQL_DATABASE=${MYSQL_DATABASE}
 # 安全密钥
 SECRET_KEY=${SECRET_KEY}
 
-# 巡检间隔（秒）
-PATROL_INTERVAL_SECONDS=30
+# 巡检间隔（秒�?PATROL_INTERVAL_SECONDS=30
 
 # 应用配置
 APP_HOST=0.0.0.0
@@ -261,9 +255,8 @@ EOF
     success "环境变量配置完成"
 }
 
-# 初始化数据库表
-init_database() {
-    info "初始化数据库表..."
+# 初始化数据库�?init_database() {
+    info "初始化数据库�?.."
     cd ${APP_DIR}/backend
     
     # 创建数据库表
@@ -274,7 +267,7 @@ Base.metadata.create_all(bind=engine)
 print('数据库表创建成功')
 "
     
-    success "数据库表初始化完成"
+    success "数据库表初始化完�?
 }
 
 # 创建后端服务
@@ -306,15 +299,14 @@ EOF
     success "后端服务创建完成"
 }
 
-# 创建前端服务（使用 Nginx）
-create_frontend_service() {
-    info "安装并配置 Nginx..."
+# 创建前端服务（使�?Nginx�?create_frontend_service() {
+    info "安装并配�?Nginx..."
     
     # 安装 Nginx
     if ! command -v nginx &> /dev/null; then
         yum install -y nginx
     else
-        info "Nginx 已安装"
+        info "Nginx 已安�?
     fi
     
     # 创建配置文件
@@ -324,8 +316,7 @@ server {
     listen [::]:80 default_server;
     server_name _;
 
-    # 前端静态文件
-    location / {
+    # 前端静态文�?    location / {
         root ${APP_DIR}/frontend/dist;
         try_files \$uri \$uri/ /index.html;
         expires 1d;
@@ -353,8 +344,7 @@ server {
         proxy_pass http://localhost:8000/redoc;
     }
 
-    # 健康检查
-    location /api/system/health {
+    # 健康检�?    location /api/system/health {
         proxy_pass http://localhost:8000/api/system/health;
         access_log off;
     }
@@ -392,26 +382,24 @@ start_services() {
     info "启动 Nginx 服务..."
     systemctl restart nginx
     
-    success "所有服务启动完成"
+    success "所有服务启动完�?
 }
 
 # 验证部署
 verify_deployment() {
     info "验证部署..."
     
-    # 检查后端服务
-    if ! systemctl is-active --quiet vip-parking-backend; then
-        error "后端服务未启动"
+    # 检查后端服�?    if ! systemctl is-active --quiet vip-parking-backend; then
+        error "后端服务未启�?
     fi
     
-    # 检查 Nginx 服务
+    # 检�?Nginx 服务
     if ! systemctl is-active --quiet nginx; then
-        error "Nginx 服务未启动"
+        error "Nginx 服务未启�?
     fi
     
-    # 检查 API 健康状态
-    if ! curl -s http://localhost:8000/api/system/health | grep -q "success"; then
-        error "API 健康检查失败"
+    # 检�?API 健康状�?    if ! curl -s http://localhost:8000/api/system/health | grep -q "success"; then
+        error "API 健康检查失�?
     fi
     
     success "部署验证通过"
@@ -431,8 +419,8 @@ show_info() {
     echo ""
     info "配置信息:"
     info "  数据库名: ${MYSQL_DATABASE}"
-    info "  数据库用户: ${MYSQL_USER}"
-    info "  数据库密码: ${MYSQL_PASSWORD}"
+    info "  数据库用�? ${MYSQL_USER}"
+    info "  数据库密�? ${MYSQL_PASSWORD}"
     info "  安全密钥: ${SECRET_KEY}"
     echo ""
     info "服务管理:"
@@ -451,24 +439,21 @@ show_info() {
     echo ""
 }
 
-# 主函数
-main() {
+# 主函�?main() {
     echo -e "${GREEN}=================================="
     echo "  VIP车位告警系统 - CentOS部署脚本"
-    echo "  数据库: MySQL 8.0"
+    echo "  数据�? MySQL 8.0"
     echo "==================================${NC}"
     echo ""
     
-    # 前置检查
-    check_root
+    # 前置检�?    check_root
     check_centos
     
     # 安装依赖
     install_system_deps
     install_nodejs
     
-    # 配置数据库
-    configure_mysql
+    # 配置数据�?    configure_mysql
     
     # 配置系统
     configure_firewall
@@ -498,5 +483,5 @@ main() {
     show_info
 }
 
-# 执行主函数
+# Execute main function
 main "$@"
