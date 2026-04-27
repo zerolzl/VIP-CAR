@@ -71,7 +71,11 @@ install_system_deps() {
     if ! rpm -qa | grep -q mysql-community-server; then
         wget https://dev.mysql.com/get/mysql80-community-release-el7-3.noarch.rpm -P /tmp/
         rpm -ivh /tmp/mysql80-community-release-el7-3.noarch.rpm
-        yum install -y mysql-community-server
+        
+        info "Installing MySQL GPG key..."
+        rpm --import https://repo.mysql.com/RPM-GPG-KEY-mysql-2022
+        
+        yum install -y mysql-community-server --nogpgcheck
     else
         info "MySQL already installed"
     fi
