@@ -50,7 +50,7 @@ check_centos() {
         CENTOS_VERSION=$(cat /etc/centos-release | grep -o '[0-9]\+' | head -n1)
         info "检测到 CentOS ${CENTOS_VERSION}"
         if [ "$CENTOS_VERSION" -lt 7 ]; then
-            error "本脚本仅支持 CentOS 7 及以上版�?
+            error "This script only supports CentOS 7 or later"
         fi
     else
         error "未检测到 CentOS 系统"
