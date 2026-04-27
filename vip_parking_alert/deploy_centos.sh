@@ -69,6 +69,10 @@ install_system_deps() {
     
     info "Installing MySQL 8.0..."
     if ! rpm -qa | grep -q mysql-community-server; then
+        info "Cleaning up existing MySQL repo files..."
+        yum remove -y mysql*-community-release 2>/dev/null || true
+        rm -rf /etc/yum.repos.d/mysql*-community.repo 2>/dev/null || true
+        
         wget https://dev.mysql.com/get/mysql80-community-release-el7-3.noarch.rpm -P /tmp/
         
         info "Installing MySQL repo with GPG check disabled..."
