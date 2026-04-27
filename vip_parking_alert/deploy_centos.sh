@@ -129,23 +129,17 @@ configure_mysql() {
     
     # 设置新密码并创建数据库
     info "配置数据库用户和权限..."
-    mysql -u root -p"${INITIAL_PASSWORD}" --connect-expired-password 2>/dev/null <<EOF || {
+    MYSQL_SQL="ALTER USER 'root'@'localhost' IDENTIFIED BY '${MYSQL_PASSWORD}';
+CREATE DATABASE IF NOT EXISTS ${MYSQL_DATABASE} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE USER IF NOT EXISTS '${MYSQL_USER}'@'localhost' IDENTIFIED BY '${MYSQL_PASSWORD}';
+GRANT ALL PRIVILEGES ON ${MYSQL_DATABASE}.* TO '${MYSQL_USER}'@'localhost';
+FLUSH PRIVILEGES;"
+    
+    if ! mysql -u root -p"${INITIAL_PASSWORD}" --connect-expired-password -e "${MYSQL_SQL}" 2>/dev/null; then
         warn "第一次连接失败，重试..."
         sleep 3
-        mysql -u root -p"${INITIAL_PASSWORD}" --connect-expired-password <<EOF2
-ALTER USER 'root'@'localhost' IDENTIFIED BY '${MYSQL_PASSWORD}';
-CREATE DATABASE IF NOT EXISTS ${MYSQL_DATABASE} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-CREATE USER IF NOT EXISTS '${MYSQL_USER}'@'localhost' IDENTIFIED BY '${MYSQL_PASSWORD}';
-GRANT ALL PRIVILEGES ON ${MYSQL_DATABASE}.* TO '${MYSQL_USER}'@'localhost';
-FLUSH PRIVILEGES;
-EOF2
-    }
-ALTER USER 'root'@'localhost' IDENTIFIED BY '${MYSQL_PASSWORD}';
-CREATE DATABASE IF NOT EXISTS ${MYSQL_DATABASE} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-CREATE USER IF NOT EXISTS '${MYSQL_USER}'@'localhost' IDENTIFIED BY '${MYSQL_PASSWORD}';
-GRANT ALL PRIVILEGES ON ${MYSQL_DATABASE}.* TO '${MYSQL_USER}'@'localhost';
-FLUSH PRIVILEGES;
-EOF
+        mysql -u root -p"${INITIAL_PASSWORD}" --connect-expired-password -e "${MYSQL_SQL}"
+    fi
     
     success "MySQL 配置完成"
 }
