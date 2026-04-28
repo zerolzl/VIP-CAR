@@ -64,20 +64,32 @@ install_system_deps() {
     yum install -y epel-release
     
     info "Installing basic tools..."
-    yum install -y wget git gcc openssl-devel
+    yum install -y wget git gcc openssl-devel zlib-devel bzip2-devel readline-devel \
+        sqlite-devel xz-devel tk-devel gdbm-devel ncurses-devel libffi-devel
     
-    info "Installing Python ${PYTHON_VERSION} from SCL..."
+    info "Installing Python ${PYTHON_VERSION} from source..."
     if ! command -v python${PYTHON_VERSION} &> /dev/null; then
-        info "Installing Software Collections..."
-        yum install -y centos-release-scl
-        yum install -y rh-python${PYTHON_VERSION/./}
+        info "Downloading Python ${PYTHON_VERSION} source..."
+        wget https://www.python.org/ftp/python/${PYTHON_VERSION}/Python-${PYTHON_VERSION}.tgz -P /tmp/
         
-        info "Enabling Python ${PYTHON_VERSION} in system path..."
-        echo "source /opt/rh/rh-python${PYTHON_VERSION/./}/enable" >> /etc/profile.d/python${PYTHON_VERSION}.sh
-        source /opt/rh/rh-python${PYTHON_VERSION/./}/enable
+        info "Extracting Python source..."
+        tar -xzf /tmp/Python-${PYTHON_VERSION}.tgz -C /tmp/
+        
+        info "Configuring Python build..."
+        cd /tmp/Python-${PYTHON_VERSION}
+        ./configure --prefix=/usr/local --enable-optimizations --with-system-ffi
+        
+        info "Compiling Python..."
+        make -j$(nproc)
+        
+        info "Installing Python..."
+        make altinstall
+        
+        info "Cleaning up..."
+        rm -rf /tmp/Python-${PYTHON_VERSION}*
         
         info "Installing pip for Python ${PYTHON_VERSION}..."
-        python${PYTHON_VERSION} -m ensurepip --upgrade
+        /usr/local/bin/python${PYTHON_VERSION} -m ensurepip --upgrade
     else
         info "Python ${PYTHON_VERSION} already installed"
     fi
