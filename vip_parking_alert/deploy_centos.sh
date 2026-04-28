@@ -1,5 +1,5 @@
 #!/bin/bash
-# VIP Parking Alert System - CentOS Deployment Script
+# VIP Parking Alert System - CentOS 8 Deployment Script
 # Please run as root user
 # This script uses MySQL database, not SQLite
 
@@ -12,7 +12,7 @@ NODE_VERSION="16"
 MYSQL_USER="vip_parking"
 MYSQL_DATABASE="vip_parking"
 MYSQL_PASSWORD="?jsh;olg"
-SECRET_KEY=$(python3 -c "import secrets; print(secrets.token_urlsafe(32))")
+SECRET_KEY=$(python3 -c "import secrets; print(secrets.token_urlsafe(32))" 2>/dev/null || echo "default-secret-key-change-in-production")
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -46,8 +46,18 @@ check_centos() {
     if [ -f /etc/centos-release ]; then
         CENTOS_VERSION=$(cat /etc/centos-release | grep -o '[0-9]\+' | head -n1)
         info "Detected CentOS ${CENTOS_VERSION}"
-        if [ "$CENTOS_VERSION" -lt 7 ]; then
-            error "This script only supports CentOS 7 or later"
+        if [ "$CENTOS_VERSION" -lt 8 ]; then
+            error "This script requires CentOS 8 or later"
+        fi
+    elif [ -f /etc/redhat-release ]; then
+        if grep -qi "centos" /etc/redhat-release; then
+            CENTOS_VERSION=$(cat /etc/redhat-release | grep -o '[0-9]\+' | head -n1)
+            info "Detected CentOS ${CENTOS_VERSION}"
+            if [ "$CENTOS_VERSION" -lt 8 ]; then
+                error "This script requires CentOS 8 or later"
+            fi
+        else
+            error "CentOS not detected"
         fi
     else
         error "CentOS not detected"
@@ -57,80 +67,58 @@ check_centos() {
 install_system_deps() {
     info "Installing system dependencies..."
     
-    info "Disabling problematic repositories..."
-    if [ -f /etc/yum.repos.d/CentOS-SCLo-scl-rh.repo ]; then
-        sed -i 's/enabled=1/enabled=0/g' /etc/yum.repos.d/CentOS-SCLo-scl-rh.repo
-        info "Disabled CentOS-SCLo-scl-rh repo"
-    fi
-    if [ -f /etc/yum.repos.d/CentOS-SCLo-scl.repo ]; then
-        sed -i 's/enabled=1/enabled=0/g' /etc/yum.repos.d/CentOS-SCLo-scl.repo
-        info "Disabled CentOS-SCLo-scl repo"
-    fi
-    
     info "Updating system packages..."
-    yum update -y --skip-broken || yum update -y 2>/dev/null || true
+    dnf update -y
     
     info "Installing EPEL repository..."
-    yum install -y epel-release --skip-broken
+    dnf install -y epel-release
+    
+    info "Enabling PowerTools repository..."
+    dnf config-manager --set-enabled powertools
     
     info "Installing basic tools..."
-    yum install -y wget git gcc openssl-devel zlib-devel bzip2-devel readline-devel \
-        sqlite-devel xz-devel tk-devel gdbm-devel ncurses-devel libffi-devel openssl --skip-broken
+    dnf install -y wget git gcc openssl-devel zlib-devel bzip2-devel readline-devel \
+        sqlite-devel xz-devel tk-devel gdbm-devel ncurses-devel libffi-devel openssl
     
-    info "Checking OpenSSL..."
-    if ! openssl version &> /dev/null; then
-        error "OpenSSL not found"
-    fi
-    OPENSSL_DIR=$(dirname $(dirname $(which openssl)))
-    info "OpenSSL found at: ${OPENSSL_DIR}"
-    
-    info "Installing Python ${PYTHON_VERSION}..."
+    info "Installing Python ${PYTHON_VERSION} from AppStream..."
     if ! command -v python${PYTHON_VERSION} &> /dev/null; then
-        PYTHON_FULL_VERSION="${PYTHON_VERSION}.14"
-        PYTHON_TGZ="/tmp/Python-${PYTHON_FULL_VERSION}.tgz"
-        
-        MIRRORS=(
-            "https://www.python.org/ftp/python/${PYTHON_FULL_VERSION}/Python-${PYTHON_FULL_VERSION}.tgz"
-            "https://mirrors.aliyun.com/python/${PYTHON_FULL_VERSION}/Python-${PYTHON_FULL_VERSION}.tgz"
-            "https://mirror.bit.edu.cn/python/${PYTHON_FULL_VERSION}/Python-${PYTHON_FULL_VERSION}.tgz"
-            "https://mirrors.nju.edu.cn/python/${PYTHON_FULL_VERSION}/Python-${PYTHON_FULL_VERSION}.tgz"
-            "https://mirror.hust.edu.cn/python/${PYTHON_FULL_VERSION}/Python-${PYTHON_FULL_VERSION}.tgz"
-        )
-        
-        info "Trying to download Python ${PYTHON_FULL_VERSION}..."
-        DOWNLOAD_SUCCESS=false
-        for mirror in "${MIRRORS[@]}"; do
-            info "Trying: ${mirror}"
-            if wget -q "${mirror}" -O "${PYTHON_TGZ}" 2>/dev/null; then
-                info "Download succeeded from ${mirror}"
-                DOWNLOAD_SUCCESS=true
-                break
-            fi
-        done
-        
-        if [ "$DOWNLOAD_SUCCESS" = true ]; then
-            info "Extracting Python source..."
-            tar -xzf "${PYTHON_TGZ}" -C /tmp/
-            
-            info "Configuring Python build with OpenSSL..."
-            cd "/tmp/Python-${PYTHON_FULL_VERSION}"
-            ./configure --prefix=/usr/local --with-system-ffi --with-openssl="${OPENSSL_DIR}"
-            
-            info "Compiling Python..."
-            make -j$(nproc)
-            
-            info "Installing Python..."
-            make altinstall
-            
-            info "Cleaning up..."
-            rm -rf "/tmp/Python-${PYTHON_FULL_VERSION}"*
-            
-            info "Installing pip..."
-            /usr/local/bin/python${PYTHON_VERSION} -m ensurepip --upgrade
-            
-            info "Python ${PYTHON_FULL_VERSION} installed successfully"
+        info "Checking available Python modules..."
+        if dnf module list python${PYTHON_VERSION/./} &> /dev/null; then
+            info "Enabling Python ${PYTHON_VERSION} module..."
+            dnf module enable -y python${PYTHON_VERSION/./}
+            info "Installing Python ${PYTHON_VERSION}..."
+            dnf install -y python${PYTHON_VERSION} python${PYTHON_VERSION}-devel python${PYTHON_VERSION}-pip
         else
-            error "Failed to download Python ${PYTHON_FULL_VERSION} from all mirrors"
+            info "AppStream module not available, installing from source..."
+            PYTHON_FULL_VERSION="${PYTHON_VERSION}.14"
+            PYTHON_TGZ="/tmp/Python-${PYTHON_FULL_VERSION}.tgz"
+            
+            MIRRORS=(
+                "https://www.python.org/ftp/python/${PYTHON_FULL_VERSION}/Python-${PYTHON_FULL_VERSION}.tgz"
+                "https://mirrors.aliyun.com/python/${PYTHON_FULL_VERSION}/Python-${PYTHON_FULL_VERSION}.tgz"
+            )
+            
+            DOWNLOAD_SUCCESS=false
+            for mirror in "${MIRRORS[@]}"; do
+                info "Trying: ${mirror}"
+                if wget -q "${mirror}" -O "${PYTHON_TGZ}" 2>/dev/null; then
+                    info "Download succeeded"
+                    DOWNLOAD_SUCCESS=true
+                    break
+                fi
+            done
+            
+            if [ "$DOWNLOAD_SUCCESS" = true ]; then
+                tar -xzf "${PYTHON_TGZ}" -C /tmp/
+                cd "/tmp/Python-${PYTHON_FULL_VERSION}"
+                ./configure --prefix=/usr/local --with-system-ffi --with-openssl=/usr
+                make -j$(nproc)
+                make altinstall
+                rm -rf "/tmp/Python-${PYTHON_FULL_VERSION}"*
+                /usr/local/bin/python${PYTHON_VERSION} -m ensurepip --upgrade
+            else
+                error "Failed to download Python"
+            fi
         fi
     else
         info "Python ${PYTHON_VERSION} already installed"
@@ -138,19 +126,8 @@ install_system_deps() {
     
     info "Installing MySQL 8.0..."
     if ! rpm -qa | grep -q mysql-community-server; then
-        info "Cleaning up existing MySQL repo files..."
-        yum remove -y mysql*-community-release 2>/dev/null || true
-        rm -rf /etc/yum.repos.d/mysql*-community.repo 2>/dev/null || true
-        
-        wget https://dev.mysql.com/get/mysql80-community-release-el7-3.noarch.rpm -P /tmp/
-        
-        info "Installing MySQL repo with GPG check disabled..."
-        rpm -ivh --nosignature /tmp/mysql80-community-release-el7-3.noarch.rpm
-        
-        info "Disabling GPG check for MySQL packages..."
-        sed -i 's/gpgcheck=1/gpgcheck=0/g' /etc/yum.repos.d/mysql*-community.repo
-        
-        yum install -y mysql-community-server --skip-broken
+        info "Installing MySQL 8.0 from AppStream..."
+        dnf install -y @mysql:8.0
     else
         info "MySQL already installed"
     fi
@@ -161,7 +138,7 @@ install_nodejs() {
     
     if ! command -v node &> /dev/null; then
         curl -fsSL https://rpm.nodesource.com/setup_${NODE_VERSION}.x | bash -
-        yum install -y nodejs
+        dnf install -y nodejs
     else
         info "Node.js already installed"
     fi
@@ -189,12 +166,6 @@ configure_mysql() {
     
     info "Getting MySQL initial password..."
     INITIAL_PASSWORD=$(grep 'temporary password' /var/log/mysqld.log | awk '{print $NF}')
-    
-    if [ -n "$INITIAL_PASSWORD" ]; then
-        info "Found temporary password: ${INITIAL_PASSWORD:0:8}..."
-    else
-        warn "No temporary password found in mysqld.log"
-    fi
     
     MYSQL_SQL="ALTER USER 'root'@'localhost' IDENTIFIED BY '${MYSQL_PASSWORD}';
 CREATE DATABASE IF NOT EXISTS ${MYSQL_DATABASE} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
@@ -238,73 +209,22 @@ FLUSH PRIVILEGES;"
     fi
     warn "Connection without password failed"
     
-    info "Trying connection with socket..."
-    if [ -S /var/lib/mysql/mysql.sock ]; then
-        if mysql -u root --socket=/var/lib/mysql/mysql.sock -e "${MYSQL_SQL}" 2>&1; then
-            success "MySQL configuration completed"
-            echo ""
-            echo -e "${GREEN}=================================="
-            echo "  MySQL Configuration Completed!"
-            echo "==================================${NC}"
-            echo ""
-            info "Database: ${MYSQL_DATABASE}"
-            info "DB User: ${MYSQL_USER}"
-            info "DB Password: ${MYSQL_PASSWORD}"
-            echo ""
-            return
-        fi
-    fi
-    warn "Connection with socket failed"
-    
-    info "Trying mysqladmin to reset root password..."
-    if [ -n "$INITIAL_PASSWORD" ]; then
-        if mysqladmin -u root password "${MYSQL_PASSWORD}" --connect-expired-password -p"${INITIAL_PASSWORD}" 2>&1; then
-            info "Password reset successful, now creating database..."
-            if mysql -u root -p"${MYSQL_PASSWORD}" -e "CREATE DATABASE IF NOT EXISTS ${MYSQL_DATABASE} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci; CREATE USER IF NOT EXISTS '${MYSQL_USER}'@'localhost' IDENTIFIED BY '${MYSQL_PASSWORD}'; GRANT ALL PRIVILEGES ON ${MYSQL_DATABASE}.* TO '${MYSQL_USER}'@'localhost'; FLUSH PRIVILEGES;" 2>&1; then
-                success "MySQL configuration completed"
-                echo ""
-                echo -e "${GREEN}=================================="
-                echo "  MySQL Configuration Completed!"
-                echo "==================================${NC}"
-                echo ""
-                info "Database: ${MYSQL_DATABASE}"
-                info "DB User: ${MYSQL_USER}"
-                info "DB Password: ${MYSQL_PASSWORD}"
-                echo ""
-                return
-            fi
-        fi
-    fi
-    warn "mysqladmin method failed"
-    
-    info "Trying skip-grant-tables method via config..."
+    info "Trying skip-grant-tables method..."
     systemctl stop mysqld
     sleep 5
     
     info "Backing up my.cnf..."
     cp /etc/my.cnf /etc/my.cnf.backup 2>/dev/null || true
-    cp /etc/mysql/my.cnf /etc/mysql/my.cnf.backup 2>/dev/null || true
     
     info "Adding skip-grant-tables to MySQL config..."
-    if [ -f /etc/my.cnf ]; then
-        echo -e "\n[mysqld]\nskip-grant-tables\nskip-networking" >> /etc/my.cnf
-    elif [ -f /etc/mysql/my.cnf ]; then
-        echo -e "\n[mysqld]\nskip-grant-tables\nskip-networking" >> /etc/mysql/my.cnf
-    elif [ -d /etc/my.cnf.d ]; then
-        echo -e "[mysqld]\nskip-grant-tables\nskip-networking" > /etc/my.cnf.d/skip-grant-tables.cnf
-    fi
+    echo -e "\n[mysqld]\nskip-grant-tables\nskip-networking" >> /etc/my.cnf
     
     info "Starting MySQL with skip-grant-tables..."
     systemctl start mysqld
     sleep 15
     
-    info "Setting root password via skip-grant-tables..."
-    if mysql -u root -e "FLUSH PRIVILEGES; ALTER USER 'root'@'localhost' IDENTIFIED BY '${MYSQL_PASSWORD}'; FLUSH PRIVILEGES;" 2>&1; then
-        info "Password set successfully"
-    else
-        warn "Failed to set password with ALTER USER, trying UPDATE..."
-        mysql -u root -e "FLUSH PRIVILEGES; UPDATE mysql.user SET authentication_string=PASSWORD('${MYSQL_PASSWORD}') WHERE User='root' AND Host='localhost'; FLUSH PRIVILEGES;" 2>&1
-    fi
+    info "Setting root password..."
+    mysql -u root -e "FLUSH PRIVILEGES; ALTER USER 'root'@'localhost' IDENTIFIED BY '${MYSQL_PASSWORD}'; FLUSH PRIVILEGES;" 2>&1 || true
     
     info "Stopping MySQL..."
     systemctl stop mysqld
@@ -312,8 +232,6 @@ FLUSH PRIVILEGES;"
     
     info "Restoring original MySQL config..."
     mv /etc/my.cnf.backup /etc/my.cnf 2>/dev/null || true
-    mv /etc/mysql/my.cnf.backup /etc/mysql/my.cnf 2>/dev/null || true
-    rm -f /etc/my.cnf.d/skip-grant-tables.cnf 2>/dev/null || true
     
     info "Restarting MySQL service..."
     systemctl start mysqld
@@ -396,16 +314,10 @@ install_python_deps() {
     info "Finding Python ${PYTHON_VERSION} executable..."
     if command -v python${PYTHON_VERSION} &> /dev/null; then
         PYTHON_BIN="python${PYTHON_VERSION}"
-        PIP_BIN="pip${PYTHON_VERSION}"
         info "Found python${PYTHON_VERSION}"
     elif command -v python3 &> /dev/null; then
         PYTHON_BIN="python3"
-        PIP_BIN="pip3"
         info "Using python3 as fallback"
-    elif command -v python &> /dev/null; then
-        PYTHON_BIN="python"
-        PIP_BIN="pip"
-        info "Using python as fallback"
     else
         error "Python not found"
     fi
@@ -452,7 +364,14 @@ init_database() {
     info "Initializing database tables..."
     cd ${APP_DIR}/backend
     
-    python${PYTHON_VERSION} -c "
+    info "Finding Python executable..."
+    if command -v python${PYTHON_VERSION} &> /dev/null; then
+        PYTHON_BIN="python${PYTHON_VERSION}"
+    else
+        PYTHON_BIN="python3"
+    fi
+    
+    ${PYTHON_BIN} -c "
 from app.db.session import engine
 from app.models.base import Base
 Base.metadata.create_all(bind=engine)
@@ -475,7 +394,13 @@ Type=simple
 User=root
 WorkingDirectory=${APP_DIR}/backend
 Environment=PYTHONPATH=${APP_DIR}/backend
-ExecStart=/usr/bin/python${PYTHON_VERSION} -m uvicorn app.main:app --host 0.0.0.0 --port 8000
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=${APP_DIR}/backend
+Environment=PYTHONPATH=${APP_DIR}/backend
+ExecStart=/usr/local/bin/python${PYTHON_VERSION} -m uvicorn app.main:app --host 0.0.0.0 --port 8000
 Restart=always
 RestartSec=5
 TimeoutStopSec=10
@@ -494,7 +419,7 @@ create_frontend_service() {
     info "Installing and configuring Nginx..."
     
     if ! command -v nginx &> /dev/null; then
-        yum install -y nginx
+        dnf install -y nginx
     else
         info "Nginx already installed"
     fi
@@ -622,7 +547,7 @@ show_info() {
 
 main() {
     echo -e "${GREEN}=================================="
-    echo "  VIP Parking Alert System - CentOS Deployment"
+    echo "  VIP Parking Alert System - CentOS 8 Deployment"
     echo "  Database: MySQL 8.0"
     echo "==================================${NC}"
     echo ""
