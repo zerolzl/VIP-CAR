@@ -11,7 +11,7 @@ PYTHON_VERSION="3.10"
 NODE_VERSION="16"
 MYSQL_USER="vip_parking"
 MYSQL_DATABASE="vip_parking"
-MYSQL_PASSWORD=$(openssl rand -base64 16 | tr '+/' 'A9' | head -c 16)$(echo '!@#$%^&*' | fold -w1 | shuf | head -n1)
+MYSQL_PASSWORD=$(python3 -c "import secrets; import string; chars = string.ascii_uppercase + string.ascii_lowercase + string.digits + '!@#$%^&*'; password = ''.join(secrets.choice(chars) for _ in range(16)); print(password)")
 SECRET_KEY=$(python3 -c "import secrets; print(secrets.token_urlsafe(32))")
 
 RED='\033[0;31m'
