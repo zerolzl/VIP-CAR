@@ -64,8 +64,44 @@ check_centos() {
     fi
 }
 
+fix_centos_repos() {
+    info "Fixing CentOS repository configuration..."
+    
+    if [ -f /etc/yum.repos.d/CentOS-Linux-BaseOS.repo ]; then
+        info "Updating CentOS BaseOS repository to vault..."
+        sed -i 's|mirrorlist=.*|baseurl=https://vault.centos.org/$contentdir/$releasever/BaseOS/$basearch/os/|g' /etc/yum.repos.d/CentOS-Linux-BaseOS.repo
+        sed -i 's|#baseurl=.*|baseurl=https://vault.centos.org/$contentdir/$releasever/BaseOS/$basearch/os/|g' /etc/yum.repos.d/CentOS-Linux-BaseOS.repo
+        sed -i 's|enabled=1|enabled=1|g' /etc/yum.repos.d/CentOS-Linux-BaseOS.repo
+    fi
+    
+    if [ -f /etc/yum.repos.d/CentOS-Linux-AppStream.repo ]; then
+        info "Updating CentOS AppStream repository to vault..."
+        sed -i 's|mirrorlist=.*|baseurl=https://vault.centos.org/$contentdir/$releasever/AppStream/$basearch/os/|g' /etc/yum.repos.d/CentOS-Linux-AppStream.repo
+        sed -i 's|#baseurl=.*|baseurl=https://vault.centos.org/$contentdir/$releasever/AppStream/$basearch/os/|g' /etc/yum.repos.d/CentOS-Linux-AppStream.repo
+        sed -i 's|enabled=1|enabled=1|g' /etc/yum.repos.d/CentOS-Linux-AppStream.repo
+    fi
+    
+    if [ -f /etc/yum.repos.d/CentOS-Linux-Extras.repo ]; then
+        info "Updating CentOS Extras repository to vault..."
+        sed -i 's|mirrorlist=.*|baseurl=https://vault.centos.org/$contentdir/$releasever/extras/$basearch/os/|g' /etc/yum.repos.d/CentOS-Linux-Extras.repo
+        sed -i 's|#baseurl=.*|baseurl=https://vault.centos.org/$contentdir/$releasever/extras/$basearch/os/|g' /etc/yum.repos.d/CentOS-Linux-Extras.repo
+        sed -i 's|enabled=1|enabled=1|g' /etc/yum.repos.d/CentOS-Linux-Extras.repo
+    fi
+    
+    if [ -f /etc/yum.repos.d/CentOS-Linux-PowerTools.repo ]; then
+        info "Updating CentOS PowerTools repository to vault..."
+        sed -i 's|mirrorlist=.*|baseurl=https://vault.centos.org/$contentdir/$releasever/PowerTools/$basearch/os/|g' /etc/yum.repos.d/CentOS-Linux-PowerTools.repo
+        sed -i 's|#baseurl=.*|baseurl=https://vault.centos.org/$contentdir/$releasever/PowerTools/$basearch/os/|g' /etc/yum.repos.d/CentOS-Linux-PowerTools.repo
+        sed -i 's|enabled=0|enabled=1|g' /etc/yum.repos.d/CentOS-Linux-PowerTools.repo
+    fi
+    
+    info "CentOS repository configuration updated"
+}
+
 install_system_deps() {
     info "Installing system dependencies..."
+    
+    fix_centos_repos
     
     info "Updating system packages..."
     dnf update -y
