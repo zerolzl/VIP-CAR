@@ -8,7 +8,7 @@ set -e
 APP_NAME="vip-parking-alert"
 APP_DIR="/opt/${APP_NAME}"
 PYTHON_VERSION="3.10"
-NODE_VERSION="18"
+NODE_VERSION="16"
 MYSQL_USER="vip_parking"
 MYSQL_DATABASE="vip_parking"
 MYSQL_PASSWORD=$(openssl rand -hex 16)

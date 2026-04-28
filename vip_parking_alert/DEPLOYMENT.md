@@ -7,7 +7,7 @@
 - 依赖库见 `backend/requirements.txt`
 
 ### Node.js 前端
-- Node.js >= 18
+- Node.js >= 16
 - npm >= 9
 
 ### MySQL 数据库
