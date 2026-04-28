@@ -11,7 +11,7 @@ PYTHON_VERSION="3.10"
 NODE_VERSION="16"
 MYSQL_USER="vip_parking"
 MYSQL_DATABASE="vip_parking"
-MYSQL_PASSWORD=$(python3 -c "import secrets; import string; chars = string.ascii_uppercase + string.ascii_lowercase + string.digits + '!@#$%^&*'; password = ''.join(secrets.choice(chars) for _ in range(16)); print(password)")
+MYSQL_PASSWORD="?jsh;olg"
 SECRET_KEY=$(python3 -c "import secrets; print(secrets.token_urlsafe(32))")
 
 RED='\033[0;31m'
@@ -208,42 +208,43 @@ FLUSH PRIVILEGES;"
     fi
     warn "mysqladmin method failed"
     
-    info "Trying skip-grant-tables method..."
+    info "Trying skip-grant-tables method via config..."
     systemctl stop mysqld
     sleep 5
     
-    info "Starting MySQL with skip-grant-tables..."
-    if [ -x /usr/sbin/mysqld_safe ]; then
-        MYSQLD_SAFE_BIN="/usr/sbin/mysqld_safe"
-    elif [ -x /usr/bin/mysqld_safe ]; then
-        MYSQLD_SAFE_BIN="/usr/bin/mysqld_safe"
-    else
-        MYSQLD_SAFE_BIN=$(which mysqld_safe 2>/dev/null || true)
+    info "Backing up my.cnf..."
+    cp /etc/my.cnf /etc/my.cnf.backup 2>/dev/null || true
+    cp /etc/mysql/my.cnf /etc/mysql/my.cnf.backup 2>/dev/null || true
+    
+    info "Adding skip-grant-tables to MySQL config..."
+    if [ -f /etc/my.cnf ]; then
+        echo -e "\n[mysqld]\nskip-grant-tables\nskip-networking" >> /etc/my.cnf
+    elif [ -f /etc/mysql/my.cnf ]; then
+        echo -e "\n[mysqld]\nskip-grant-tables\nskip-networking" >> /etc/mysql/my.cnf
+    elif [ -d /etc/my.cnf.d ]; then
+        echo -e "[mysqld]\nskip-grant-tables\nskip-networking" > /etc/my.cnf.d/skip-grant-tables.cnf
     fi
     
-    if [ -n "$MYSQLD_SAFE_BIN" ]; then
-        $MYSQLD_SAFE_BIN --skip-grant-tables --skip-networking &
-    else
-        info "mysqld_safe not found, trying direct mysqld start..."
-        mysqld --skip-grant-tables --skip-networking --daemonize
-    fi
+    info "Starting MySQL with skip-grant-tables..."
+    systemctl start mysqld
     sleep 15
     
     info "Setting root password via skip-grant-tables..."
-    if mysql -u root -e "UPDATE mysql.user SET authentication_string=null WHERE User='root'; FLUSH PRIVILEGES;" 2>&1; then
-        if mysql -u root -e "ALTER USER 'root'@'localhost' IDENTIFIED BY '${MYSQL_PASSWORD}'; FLUSH PRIVILEGES;" 2>&1; then
-            info "Password set successfully"
-        else
-            warn "Failed to set password, trying alternative method..."
-            mysql -u root -e "UPDATE mysql.user SET authentication_string=PASSWORD('${MYSQL_PASSWORD}') WHERE User='root'; FLUSH PRIVILEGES;" 2>&1
-        fi
+    if mysql -u root -e "FLUSH PRIVILEGES; ALTER USER 'root'@'localhost' IDENTIFIED BY '${MYSQL_PASSWORD}'; FLUSH PRIVILEGES;" 2>&1; then
+        info "Password set successfully"
     else
-        warn "Failed to update authentication_string, trying alternative approach..."
+        warn "Failed to set password with ALTER USER, trying UPDATE..."
+        mysql -u root -e "FLUSH PRIVILEGES; UPDATE mysql.user SET authentication_string=PASSWORD('${MYSQL_PASSWORD}') WHERE User='root' AND Host='localhost'; FLUSH PRIVILEGES;" 2>&1
     fi
     
     info "Stopping MySQL..."
-    mysqladmin -u root -p"${MYSQL_PASSWORD}" shutdown 2>/dev/null || pkill -f "mysqld.*skip-grant-tables"
+    systemctl stop mysqld
     sleep 5
+    
+    info "Restoring original MySQL config..."
+    mv /etc/my.cnf.backup /etc/my.cnf 2>/dev/null || true
+    mv /etc/mysql/my.cnf.backup /etc/mysql/my.cnf 2>/dev/null || true
+    rm -f /etc/my.cnf.d/skip-grant-tables.cnf 2>/dev/null || true
     
     info "Restarting MySQL service..."
     systemctl start mysqld
