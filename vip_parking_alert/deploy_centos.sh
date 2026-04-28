@@ -75,7 +75,14 @@ install_system_deps() {
     
     info "Installing basic tools..."
     yum install -y wget git gcc openssl-devel zlib-devel bzip2-devel readline-devel \
-        sqlite-devel xz-devel tk-devel gdbm-devel ncurses-devel libffi-devel --skip-broken
+        sqlite-devel xz-devel tk-devel gdbm-devel ncurses-devel libffi-devel openssl --skip-broken
+    
+    info "Checking OpenSSL..."
+    if ! openssl version &> /dev/null; then
+        error "OpenSSL not found"
+    fi
+    OPENSSL_DIR=$(dirname $(dirname $(which openssl)))
+    info "OpenSSL found at: ${OPENSSL_DIR}"
     
     info "Installing Python ${PYTHON_VERSION}..."
     if ! command -v python${PYTHON_VERSION} &> /dev/null; then
@@ -105,9 +112,9 @@ install_system_deps() {
             info "Extracting Python source..."
             tar -xzf "${PYTHON_TGZ}" -C /tmp/
             
-            info "Configuring Python build..."
+            info "Configuring Python build with OpenSSL..."
             cd "/tmp/Python-${PYTHON_FULL_VERSION}"
-            ./configure --prefix=/usr/local --with-system-ffi
+            ./configure --prefix=/usr/local --with-system-ffi --with-openssl="${OPENSSL_DIR}"
             
             info "Compiling Python..."
             make -j$(nproc)
