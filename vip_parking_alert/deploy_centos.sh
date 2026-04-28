@@ -210,23 +210,44 @@ FLUSH PRIVILEGES;"
     
     info "Trying skip-grant-tables method..."
     systemctl stop mysqld
-    sleep 2
+    sleep 5
     
     info "Starting MySQL with skip-grant-tables..."
-    mysqld_safe --skip-grant-tables --skip-networking &
-    sleep 10
+    if [ -x /usr/sbin/mysqld_safe ]; then
+        MYSQLD_SAFE_BIN="/usr/sbin/mysqld_safe"
+    elif [ -x /usr/bin/mysqld_safe ]; then
+        MYSQLD_SAFE_BIN="/usr/bin/mysqld_safe"
+    else
+        MYSQLD_SAFE_BIN=$(which mysqld_safe 2>/dev/null || true)
+    fi
+    
+    if [ -n "$MYSQLD_SAFE_BIN" ]; then
+        $MYSQLD_SAFE_BIN --skip-grant-tables --skip-networking &
+    else
+        info "mysqld_safe not found, trying direct mysqld start..."
+        mysqld --skip-grant-tables --skip-networking --daemonize
+    fi
+    sleep 15
     
     info "Setting root password via skip-grant-tables..."
-    mysql -u root -e "UPDATE mysql.user SET authentication_string=null WHERE User='root'; FLUSH PRIVILEGES;" 2>&1
-    mysql -u root -e "ALTER USER 'root'@'localhost' IDENTIFIED BY '${MYSQL_PASSWORD}'; FLUSH PRIVILEGES;" 2>&1
+    if mysql -u root -e "UPDATE mysql.user SET authentication_string=null WHERE User='root'; FLUSH PRIVILEGES;" 2>&1; then
+        if mysql -u root -e "ALTER USER 'root'@'localhost' IDENTIFIED BY '${MYSQL_PASSWORD}'; FLUSH PRIVILEGES;" 2>&1; then
+            info "Password set successfully"
+        else
+            warn "Failed to set password, trying alternative method..."
+            mysql -u root -e "UPDATE mysql.user SET authentication_string=PASSWORD('${MYSQL_PASSWORD}') WHERE User='root'; FLUSH PRIVILEGES;" 2>&1
+        fi
+    else
+        warn "Failed to update authentication_string, trying alternative approach..."
+    fi
     
-    info "Stopping mysqld_safe..."
-    mysqladmin -u root -p"${MYSQL_PASSWORD}" shutdown 2>&1
-    sleep 3
+    info "Stopping MySQL..."
+    mysqladmin -u root -p"${MYSQL_PASSWORD}" shutdown 2>/dev/null || pkill -f "mysqld.*skip-grant-tables"
+    sleep 5
     
     info "Restarting MySQL service..."
     systemctl start mysqld
-    sleep 10
+    sleep 15
     
     info "Creating database and user..."
     if mysql -u root -p"${MYSQL_PASSWORD}" -e "CREATE DATABASE IF NOT EXISTS ${MYSQL_DATABASE} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci; CREATE USER IF NOT EXISTS '${MYSQL_USER}'@'localhost' IDENTIFIED BY '${MYSQL_PASSWORD}'; GRANT ALL PRIVILEGES ON ${MYSQL_DATABASE}.* TO '${MYSQL_USER}'@'localhost'; FLUSH PRIVILEGES;" 2>&1; then
