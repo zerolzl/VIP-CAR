@@ -79,14 +79,15 @@ install_system_deps() {
     
     info "Installing Python ${PYTHON_VERSION} from source..."
     if ! command -v python${PYTHON_VERSION} &> /dev/null; then
-        info "Downloading Python ${PYTHON_VERSION} source..."
-        wget https://www.python.org/ftp/python/${PYTHON_VERSION}/Python-${PYTHON_VERSION}.tgz -P /tmp/
+        PYTHON_FULL_VERSION="${PYTHON_VERSION}.14"
+        info "Downloading Python ${PYTHON_FULL_VERSION} source..."
+        wget https://www.python.org/ftp/python/${PYTHON_FULL_VERSION}/Python-${PYTHON_FULL_VERSION}.tgz -P /tmp/
         
         info "Extracting Python source..."
-        tar -xzf /tmp/Python-${PYTHON_VERSION}.tgz -C /tmp/
+        tar -xzf /tmp/Python-${PYTHON_FULL_VERSION}.tgz -C /tmp/
         
         info "Configuring Python build..."
-        cd /tmp/Python-${PYTHON_VERSION}
+        cd /tmp/Python-${PYTHON_FULL_VERSION}
         ./configure --prefix=/usr/local --enable-optimizations --with-system-ffi
         
         info "Compiling Python..."
@@ -96,7 +97,7 @@ install_system_deps() {
         make altinstall
         
         info "Cleaning up..."
-        rm -rf /tmp/Python-${PYTHON_VERSION}*
+        rm -rf /tmp/Python-${PYTHON_FULL_VERSION}*
         
         info "Installing pip for Python ${PYTHON_VERSION}..."
         /usr/local/bin/python${PYTHON_VERSION} -m ensurepip --upgrade
