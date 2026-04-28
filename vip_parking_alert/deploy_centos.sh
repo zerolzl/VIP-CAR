@@ -57,15 +57,25 @@ check_centos() {
 install_system_deps() {
     info "Installing system dependencies..."
     
+    info "Disabling problematic repositories..."
+    if [ -f /etc/yum.repos.d/CentOS-SCLo-scl-rh.repo ]; then
+        sed -i 's/enabled=1/enabled=0/g' /etc/yum.repos.d/CentOS-SCLo-scl-rh.repo
+        info "Disabled CentOS-SCLo-scl-rh repo"
+    fi
+    if [ -f /etc/yum.repos.d/CentOS-SCLo-scl.repo ]; then
+        sed -i 's/enabled=1/enabled=0/g' /etc/yum.repos.d/CentOS-SCLo-scl.repo
+        info "Disabled CentOS-SCLo-scl repo"
+    fi
+    
     info "Updating system packages..."
-    yum update -y
+    yum update -y --skip-broken || yum update -y 2>/dev/null || true
     
     info "Installing EPEL repository..."
-    yum install -y epel-release
+    yum install -y epel-release --skip-broken
     
     info "Installing basic tools..."
     yum install -y wget git gcc openssl-devel zlib-devel bzip2-devel readline-devel \
-        sqlite-devel xz-devel tk-devel gdbm-devel ncurses-devel libffi-devel
+        sqlite-devel xz-devel tk-devel gdbm-devel ncurses-devel libffi-devel --skip-broken
     
     info "Installing Python ${PYTHON_VERSION} from source..."
     if ! command -v python${PYTHON_VERSION} &> /dev/null; then
@@ -108,7 +118,7 @@ install_system_deps() {
         info "Disabling GPG check for MySQL packages..."
         sed -i 's/gpgcheck=1/gpgcheck=0/g' /etc/yum.repos.d/mysql*-community.repo
         
-        yum install -y mysql-community-server
+        yum install -y mysql-community-server --skip-broken
     else
         info "MySQL already installed"
     fi
