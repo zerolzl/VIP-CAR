@@ -173,20 +173,18 @@ create_app_dir() {
 copy_app_files() {
     info "Copying application files..."
     
-    if [ -d "vip_parking_alert/backend" ]; then
-        cp -r vip_parking_alert/backend/* ${APP_DIR}/backend/
-    elif [ -d "../backend" ]; then
-        cp -r ../backend/* ${APP_DIR}/backend/
+    SCRIPT_DIR=$(dirname "$(readlink -f "$0")")
+    
+    if [ -d "${SCRIPT_DIR}/backend" ]; then
+        cp -r ${SCRIPT_DIR}/backend/* ${APP_DIR}/backend/
     else
-        error "Backend directory not found"
+        error "Backend directory not found at ${SCRIPT_DIR}/backend"
     fi
     
-    if [ -d "vip_parking_alert/frontend" ]; then
-        cp -r vip_parking_alert/frontend/* ${APP_DIR}/frontend/
-    elif [ -d "../frontend" ]; then
-        cp -r ../frontend/* ${APP_DIR}/frontend/
+    if [ -d "${SCRIPT_DIR}/frontend" ]; then
+        cp -r ${SCRIPT_DIR}/frontend/* ${APP_DIR}/frontend/
     else
-        error "Frontend directory not found"
+        error "Frontend directory not found at ${SCRIPT_DIR}/frontend"
     fi
     
     success "Application files copied"
