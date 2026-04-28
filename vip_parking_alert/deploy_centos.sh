@@ -79,37 +79,51 @@ install_system_deps() {
     
     info "Installing Python ${PYTHON_VERSION}..."
     if ! command -v python${PYTHON_VERSION} &> /dev/null; then
-        info "Trying IUS repository..."
-        if wget https://repo.ius.io/ius-release-el7.rpm -P /tmp/ 2>/dev/null; then
-            rpm -ivh /tmp/ius-release-el7.rpm 2>/dev/null || true
-            if yum install -y python${PYTHON_VERSION/./}u python${PYTHON_VERSION/./}u-pip --skip-broken 2>/dev/null; then
-                ln -sf /usr/bin/python${PYTHON_VERSION} /usr/local/bin/python${PYTHON_VERSION} 2>/dev/null || true
-                info "Python ${PYTHON_VERSION} installed from IUS"
-            else
-                info "IUS failed, trying source..."
-                PYTHON_FULL_VERSION="${PYTHON_VERSION}.14"
-                wget https://www.python.org/ftp/python/${PYTHON_FULL_VERSION}/Python-${PYTHON_FULL_VERSION}.tgz -P /tmp/
-                tar -xzf /tmp/Python-${PYTHON_FULL_VERSION}.tgz -C /tmp/
-                cd /tmp/Python-${PYTHON_FULL_VERSION}
-                ./configure --prefix=/usr/local --with-system-ffi
-                make -j$(nproc)
-                make altinstall
-                rm -rf /tmp/Python-${PYTHON_FULL_VERSION}*
-                /usr/local/bin/python${PYTHON_VERSION} -m ensurepip --upgrade
-                info "Python ${PYTHON_VERSION} installed from source"
+        PYTHON_FULL_VERSION="${PYTHON_VERSION}.14"
+        PYTHON_TGZ="/tmp/Python-${PYTHON_FULL_VERSION}.tgz"
+        
+        MIRRORS=(
+            "https://www.python.org/ftp/python/${PYTHON_FULL_VERSION}/Python-${PYTHON_FULL_VERSION}.tgz"
+            "https://mirrors.aliyun.com/python/${PYTHON_FULL_VERSION}/Python-${PYTHON_FULL_VERSION}.tgz"
+            "https://mirror.bit.edu.cn/python/${PYTHON_FULL_VERSION}/Python-${PYTHON_FULL_VERSION}.tgz"
+            "https://mirrors.nju.edu.cn/python/${PYTHON_FULL_VERSION}/Python-${PYTHON_FULL_VERSION}.tgz"
+            "https://mirror.hust.edu.cn/python/${PYTHON_FULL_VERSION}/Python-${PYTHON_FULL_VERSION}.tgz"
+        )
+        
+        info "Trying to download Python ${PYTHON_FULL_VERSION}..."
+        DOWNLOAD_SUCCESS=false
+        for mirror in "${MIRRORS[@]}"; do
+            info "Trying: ${mirror}"
+            if wget -q "${mirror}" -O "${PYTHON_TGZ}" 2>/dev/null; then
+                info "Download succeeded from ${mirror}"
+                DOWNLOAD_SUCCESS=true
+                break
             fi
-        else
-            info "Download failed, trying alternative source..."
-            PYTHON_FULL_VERSION="${PYTHON_VERSION}.14"
-            wget https://mirrors.tuna.tsinghua.edu.cn/python/${PYTHON_FULL_VERSION}/Python-${PYTHON_FULL_VERSION}.tgz -P /tmp/
-            tar -xzf /tmp/Python-${PYTHON_FULL_VERSION}.tgz -C /tmp/
-            cd /tmp/Python-${PYTHON_FULL_VERSION}
+        done
+        
+        if [ "$DOWNLOAD_SUCCESS" = true ]; then
+            info "Extracting Python source..."
+            tar -xzf "${PYTHON_TGZ}" -C /tmp/
+            
+            info "Configuring Python build..."
+            cd "/tmp/Python-${PYTHON_FULL_VERSION}"
             ./configure --prefix=/usr/local --with-system-ffi
+            
+            info "Compiling Python..."
             make -j$(nproc)
+            
+            info "Installing Python..."
             make altinstall
-            rm -rf /tmp/Python-${PYTHON_FULL_VERSION}*
+            
+            info "Cleaning up..."
+            rm -rf "/tmp/Python-${PYTHON_FULL_VERSION}"*
+            
+            info "Installing pip..."
             /usr/local/bin/python${PYTHON_VERSION} -m ensurepip --upgrade
-            info "Python ${PYTHON_VERSION} installed from mirror"
+            
+            info "Python ${PYTHON_FULL_VERSION} installed successfully"
+        else
+            error "Failed to download Python ${PYTHON_FULL_VERSION} from all mirrors"
         fi
     else
         info "Python ${PYTHON_VERSION} already installed"
