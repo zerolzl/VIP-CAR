@@ -324,8 +324,28 @@ install_python_deps() {
     info "Installing Python dependencies..."
     cd ${APP_DIR}/backend
     
-    python${PYTHON_VERSION} -m pip install --upgrade pip
-    pip${PYTHON_VERSION} install -r requirements.txt
+    info "Finding Python ${PYTHON_VERSION} executable..."
+    if command -v python${PYTHON_VERSION} &> /dev/null; then
+        PYTHON_BIN="python${PYTHON_VERSION}"
+        PIP_BIN="pip${PYTHON_VERSION}"
+        info "Found python${PYTHON_VERSION}"
+    elif command -v python3 &> /dev/null; then
+        PYTHON_BIN="python3"
+        PIP_BIN="pip3"
+        info "Using python3 as fallback"
+    elif command -v python &> /dev/null; then
+        PYTHON_BIN="python"
+        PIP_BIN="pip"
+        info "Using python as fallback"
+    else
+        error "Python not found"
+    fi
+    
+    info "Upgrading pip..."
+    ${PYTHON_BIN} -m pip install --upgrade pip
+    
+    info "Installing requirements..."
+    ${PYTHON_BIN} -m pip install -r requirements.txt
     
     success "Python dependencies installed"
 }
