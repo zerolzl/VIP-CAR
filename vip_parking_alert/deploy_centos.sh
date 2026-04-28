@@ -108,34 +108,76 @@ configure_mysql() {
     systemctl start mysqld
     
     info "Waiting for MySQL initialization..."
-    for i in {1..30}; do
+    for i in {1..60}; do
         if systemctl is-active --quiet mysqld; then
             break
         fi
         sleep 1
     done
     
+    info "Waiting for MySQL to be fully ready..."
+    sleep 10
+    
     info "Getting MySQL initial password..."
     INITIAL_PASSWORD=$(grep 'temporary password' /var/log/mysqld.log | awk '{print $NF}')
     
-    if [ -z "$INITIAL_PASSWORD" ]; then
-        error "Failed to get MySQL initial password"
-    fi
-    
-    info "Configuring database user and privileges..."
     MYSQL_SQL="ALTER USER 'root'@'localhost' IDENTIFIED BY '${MYSQL_PASSWORD}';
 CREATE DATABASE IF NOT EXISTS ${MYSQL_DATABASE} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 CREATE USER IF NOT EXISTS '${MYSQL_USER}'@'localhost' IDENTIFIED BY '${MYSQL_PASSWORD}';
 GRANT ALL PRIVILEGES ON ${MYSQL_DATABASE}.* TO '${MYSQL_USER}'@'localhost';
 FLUSH PRIVILEGES;"
     
-    if ! mysql -u root -p"${INITIAL_PASSWORD}" --connect-expired-password -e "${MYSQL_SQL}" 2>/dev/null; then
-        warn "First connection failed, retrying..."
-        sleep 3
-        mysql -u root -p"${INITIAL_PASSWORD}" --connect-expired-password -e "${MYSQL_SQL}"
+    info "Configuring database user and privileges..."
+    
+    if [ -n "$INITIAL_PASSWORD" ]; then
+        if mysql -u root -p"${INITIAL_PASSWORD}" --connect-expired-password -e "${MYSQL_SQL}" 2>/dev/null; then
+            success "MySQL configuration completed"
+            echo ""
+            echo -e "${GREEN}=================================="
+            echo "  MySQL Configuration Completed!"
+            echo "==================================${NC}"
+            echo ""
+            info "Database: ${MYSQL_DATABASE}"
+            info "DB User: ${MYSQL_USER}"
+            info "DB Password: ${MYSQL_PASSWORD}"
+            echo ""
+            return
+        fi
+        warn "Connection with temp password failed, trying without password..."
     fi
     
-    success "MySQL configuration completed"
+    if mysql -u root -e "${MYSQL_SQL}" 2>/dev/null; then
+        success "MySQL configuration completed"
+        echo ""
+        echo -e "${GREEN}=================================="
+        echo "  MySQL Configuration Completed!"
+        echo "==================================${NC}"
+        echo ""
+        info "Database: ${MYSQL_DATABASE}"
+        info "DB User: ${MYSQL_USER}"
+        info "DB Password: ${MYSQL_PASSWORD}"
+        echo ""
+        return
+    fi
+    warn "Connection without password failed, trying with socket..."
+    
+    if [ -S /var/lib/mysql/mysql.sock ]; then
+        if mysql -u root --socket=/var/lib/mysql/mysql.sock -e "${MYSQL_SQL}" 2>/dev/null; then
+            success "MySQL configuration completed"
+            echo ""
+            echo -e "${GREEN}=================================="
+            echo "  MySQL Configuration Completed!"
+            echo "==================================${NC}"
+            echo ""
+            info "Database: ${MYSQL_DATABASE}"
+            info "DB User: ${MYSQL_USER}"
+            info "DB Password: ${MYSQL_PASSWORD}"
+            echo ""
+            return
+        fi
+    fi
+    
+    error "Failed to configure MySQL database"
 }
 
 configure_firewall() {
