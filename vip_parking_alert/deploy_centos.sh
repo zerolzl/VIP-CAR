@@ -64,8 +64,23 @@ install_system_deps() {
     yum install -y epel-release
     
     info "Installing basic tools..."
-    yum install -y wget git gcc python${PYTHON_VERSION} python${PYTHON_VERSION}-devel \
-        python${PYTHON_VERSION}-pip openssl-devel
+    yum install -y wget git gcc openssl-devel
+    
+    info "Installing Python ${PYTHON_VERSION} from SCL..."
+    if ! command -v python${PYTHON_VERSION} &> /dev/null; then
+        info "Installing Software Collections..."
+        yum install -y centos-release-scl
+        yum install -y rh-python${PYTHON_VERSION/./}
+        
+        info "Enabling Python ${PYTHON_VERSION} in system path..."
+        echo "source /opt/rh/rh-python${PYTHON_VERSION/./}/enable" >> /etc/profile.d/python${PYTHON_VERSION}.sh
+        source /opt/rh/rh-python${PYTHON_VERSION/./}/enable
+        
+        info "Installing pip for Python ${PYTHON_VERSION}..."
+        python${PYTHON_VERSION} -m ensurepip --upgrade
+    else
+        info "Python ${PYTHON_VERSION} already installed"
+    fi
     
     info "Installing MySQL 8.0..."
     if ! rpm -qa | grep -q mysql-community-server; then
