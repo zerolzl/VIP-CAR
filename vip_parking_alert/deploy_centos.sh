@@ -116,10 +116,16 @@ configure_mysql() {
     done
     
     info "Waiting for MySQL to be fully ready..."
-    sleep 10
+    sleep 15
     
     info "Getting MySQL initial password..."
     INITIAL_PASSWORD=$(grep 'temporary password' /var/log/mysqld.log | awk '{print $NF}')
+    
+    if [ -n "$INITIAL_PASSWORD" ]; then
+        info "Found temporary password: ${INITIAL_PASSWORD:0:8}..."
+    else
+        warn "No temporary password found in mysqld.log"
+    fi
     
     MYSQL_SQL="ALTER USER 'root'@'localhost' IDENTIFIED BY '${MYSQL_PASSWORD}';
 CREATE DATABASE IF NOT EXISTS ${MYSQL_DATABASE} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
@@ -130,7 +136,8 @@ FLUSH PRIVILEGES;"
     info "Configuring database user and privileges..."
     
     if [ -n "$INITIAL_PASSWORD" ]; then
-        if mysql -u root -p"${INITIAL_PASSWORD}" --connect-expired-password -e "${MYSQL_SQL}" 2>/dev/null; then
+        info "Trying connection with temporary password..."
+        if mysql -u root -p"${INITIAL_PASSWORD}" --connect-expired-password -e "${MYSQL_SQL}" 2>&1; then
             success "MySQL configuration completed"
             echo ""
             echo -e "${GREEN}=================================="
@@ -143,10 +150,11 @@ FLUSH PRIVILEGES;"
             echo ""
             return
         fi
-        warn "Connection with temp password failed, trying without password..."
+        warn "Connection with temp password failed"
     fi
     
-    if mysql -u root -e "${MYSQL_SQL}" 2>/dev/null; then
+    info "Trying connection without password..."
+    if mysql -u root -e "${MYSQL_SQL}" 2>&1; then
         success "MySQL configuration completed"
         echo ""
         echo -e "${GREEN}=================================="
@@ -159,10 +167,11 @@ FLUSH PRIVILEGES;"
         echo ""
         return
     fi
-    warn "Connection without password failed, trying with socket..."
+    warn "Connection without password failed"
     
+    info "Trying connection with socket..."
     if [ -S /var/lib/mysql/mysql.sock ]; then
-        if mysql -u root --socket=/var/lib/mysql/mysql.sock -e "${MYSQL_SQL}" 2>/dev/null; then
+        if mysql -u root --socket=/var/lib/mysql/mysql.sock -e "${MYSQL_SQL}" 2>&1; then
             success "MySQL configuration completed"
             echo ""
             echo -e "${GREEN}=================================="
@@ -175,6 +184,63 @@ FLUSH PRIVILEGES;"
             echo ""
             return
         fi
+    fi
+    warn "Connection with socket failed"
+    
+    info "Trying mysqladmin to reset root password..."
+    if [ -n "$INITIAL_PASSWORD" ]; then
+        if mysqladmin -u root password "${MYSQL_PASSWORD}" --connect-expired-password -p"${INITIAL_PASSWORD}" 2>&1; then
+            info "Password reset successful, now creating database..."
+            if mysql -u root -p"${MYSQL_PASSWORD}" -e "CREATE DATABASE IF NOT EXISTS ${MYSQL_DATABASE} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci; CREATE USER IF NOT EXISTS '${MYSQL_USER}'@'localhost' IDENTIFIED BY '${MYSQL_PASSWORD}'; GRANT ALL PRIVILEGES ON ${MYSQL_DATABASE}.* TO '${MYSQL_USER}'@'localhost'; FLUSH PRIVILEGES;" 2>&1; then
+                success "MySQL configuration completed"
+                echo ""
+                echo -e "${GREEN}=================================="
+                echo "  MySQL Configuration Completed!"
+                echo "==================================${NC}"
+                echo ""
+                info "Database: ${MYSQL_DATABASE}"
+                info "DB User: ${MYSQL_USER}"
+                info "DB Password: ${MYSQL_PASSWORD}"
+                echo ""
+                return
+            fi
+        fi
+    fi
+    warn "mysqladmin method failed"
+    
+    info "Trying skip-grant-tables method..."
+    systemctl stop mysqld
+    sleep 2
+    
+    info "Starting MySQL with skip-grant-tables..."
+    mysqld_safe --skip-grant-tables --skip-networking &
+    sleep 10
+    
+    info "Setting root password via skip-grant-tables..."
+    mysql -u root -e "UPDATE mysql.user SET authentication_string=null WHERE User='root'; FLUSH PRIVILEGES;" 2>&1
+    mysql -u root -e "ALTER USER 'root'@'localhost' IDENTIFIED BY '${MYSQL_PASSWORD}'; FLUSH PRIVILEGES;" 2>&1
+    
+    info "Stopping mysqld_safe..."
+    mysqladmin -u root -p"${MYSQL_PASSWORD}" shutdown 2>&1
+    sleep 3
+    
+    info "Restarting MySQL service..."
+    systemctl start mysqld
+    sleep 10
+    
+    info "Creating database and user..."
+    if mysql -u root -p"${MYSQL_PASSWORD}" -e "CREATE DATABASE IF NOT EXISTS ${MYSQL_DATABASE} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci; CREATE USER IF NOT EXISTS '${MYSQL_USER}'@'localhost' IDENTIFIED BY '${MYSQL_PASSWORD}'; GRANT ALL PRIVILEGES ON ${MYSQL_DATABASE}.* TO '${MYSQL_USER}'@'localhost'; FLUSH PRIVILEGES;" 2>&1; then
+        success "MySQL configuration completed"
+        echo ""
+        echo -e "${GREEN}=================================="
+        echo "  MySQL Configuration Completed!"
+        echo "==================================${NC}"
+        echo ""
+        info "Database: ${MYSQL_DATABASE}"
+        info "DB User: ${MYSQL_USER}"
+        info "DB Password: ${MYSQL_PASSWORD}"
+        echo ""
+        return
     fi
     
     error "Failed to configure MySQL database"
